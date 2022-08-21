@@ -3,9 +3,9 @@ package config
 import "github.com/astaxie/beego"
 
 type Config struct {
-	DBPath string
-	Oracle string
-	Token  string
+	DBPath  string
+	Oracle  string
+	Token   string
 	NodeRPC string
 	PrivKey string
 	ChainId int
@@ -19,8 +19,8 @@ func GetConfig() Config {
 	conf := defaultConfig
 	conf.NodeRPC = beego.AppConfig.String("url")
 	conf.Oracle = beego.AppConfig.String("oracleAddr")
-	conf.Token  = beego.AppConfig.String("tokenAddr")
-	conf.Token  = beego.AppConfig.String("privkey")
-	conf.ChainId,_ = beego.AppConfig.Int("chainid")
+	conf.Token = beego.AppConfig.String("tokenAddr")
+	conf.PrivKey = beego.AppConfig.String("privkey")
+	conf.ChainId, _ = beego.AppConfig.Int("chainid")
 	return conf
 }
