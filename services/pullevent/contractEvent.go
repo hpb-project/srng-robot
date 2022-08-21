@@ -31,6 +31,7 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 				return nil
 			}
 			// go to reveal.
+			logs.Info("commit has been subscribed", "commit", sub.Hash)
 			if _, exist := db.GetSeedBySeedHash(pe.ldb, sub.Hash[:]); exist {
 				// check unreveal
 				if db.HashUnRevealSeed(pe.ldb, sub.Hash[:]) {
@@ -38,7 +39,7 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 				}
 			}
 			pe.work.Reveal(sub.Hash[:])
-			logs.Info("commit has been subscribed", "commit", sub.Hash)
+
 
 		case EventCommitHash:
 			commit, err := filter.ParseCommitHash(vLog)
@@ -49,6 +50,7 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 			if commit.Sender != pe.user {
 				return nil
 			}
+			logs.Info("got event commit", commit)
 			// first check commit exist and unreveal.
 			if _, exist := db.GetSeedBySeedHash(pe.ldb, commit.Hash[:]); exist {
 				// check unreveal
@@ -63,7 +65,7 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 					}
 				}
 			}
-			logs.Info("got event commit", commit)
+
 		case EventRevealSeed:
 			reveal, err := filter.ParseRevealSeed(vLog)
 			if err != nil {
@@ -73,10 +75,11 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 			if reveal.Commiter != pe.user {
 				return nil
 			}
+			logs.Info("commit reveal succeed", "event", reveal)
 			// set commit reveal finished.
 			db.DelUnRevealSeed(pe.ldb, reveal.Hash[:])
 			db.SetSeedHashAndSeed(pe.ldb, reveal.Hash[:], reveal.Seed[:])
-			logs.Info("commit reveal succeed", "event", reveal)
+
 
 		case EventUnSubscribe, EventRandomConsumed:
 			// ignore event.

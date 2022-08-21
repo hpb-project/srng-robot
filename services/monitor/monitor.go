@@ -154,6 +154,7 @@ func (s MonitorService) doReveal(commit []byte) bool {
 		logs.Error("tx reveal failed", "err", err)
 		return false
 	}
+	logs.Info("do reveal", "hash", hex.EncodeToString(hash[:]))
 	receipt := s.waittx(tx)
 	if receipt != nil && receipt.Status == 1 {
 		// successful
@@ -178,6 +179,7 @@ func (s MonitorService) DoCommit() error {
 		logs.Error("commit seed hash failed", "err", err)
 		return err
 	}
+	logs.Info("do commit", "hash", hex.EncodeToString(seedHash[:]))
 	receipt := s.waittx(tx)
 	if receipt != nil && receipt.Status == 1 {
 		db.SetUnRevealSeed(s.ldb, seedHash[:])
