@@ -104,7 +104,7 @@ func (s MonitorService)approvetoken(amount *big.Int) error {
 		logs.Error("create token contracts failed", "err", err)
 		return err
 	}
-	tx,err := token.Approve(s.transopt, common.HexToAddress(s.conf.Oracle), new(big.Int).Exp(amount, unit,nil))
+	tx,err := token.Approve(s.transopt, common.HexToAddress(s.conf.Oracle), new(big.Int).Mul(amount, unit))
 	if err != nil {
 		logs.Error("approve token failed", "err",err)
 		return err
