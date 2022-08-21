@@ -2,8 +2,8 @@ package monitor
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
-	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -14,20 +14,21 @@ import (
 	"github.com/hpb-project/srng-robot/contracts"
 	"github.com/hpb-project/srng-robot/db"
 	"github.com/hpb-project/srng-robot/utils"
-	"golang.org/x/crypto/sha3"
 	"math/big"
+	"time"
 )
 
 type MonitorService struct {
 	ctx context.Context
 	ldb *db.LevelDB
+	client *ethclient.Client
 	oracleContract *contracts.Oracle
 
 	user common.Address
 	transopt *bind.TransactOpts
 	callopt  *bind.CallOpts
 
-	revealTask chan common.Hash
+	revealTask chan []byte
 }
 
 func NewMonitorService(config config.Config, ldb *db.LevelDB)  (*MonitorService,error) {
@@ -83,41 +84,95 @@ func NewMonitorService(config config.Config, ldb *db.LevelDB)  (*MonitorService,
 		user: keyAddr,
 		transopt: transopt,
 		callopt: callopt,
-		revealTask: make(chan common.Hash, 10),
+		client:client,
+		revealTask: make(chan []byte, 10),
 	}
 	return product, nil
 }
 
-func (s MonitorService) DoReveal(commit common.Hash) {
+func (s MonitorService) waittx(tx *types.Transaction) *types.Receipt {
+	ticker := time.NewTicker(time.Second*2)
+	timeout := time.NewTimer(time.Second*30)
+	defer ticker.Stop()
+	defer timeout.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			r, err := s.client.TransactionReceipt(s.ctx, tx.Hash())
+			if err != nil || r == nil {
+				continue
+			}
+			return r
+
+		case <-timeout.C:
+			return nil
+		}
+	}
+}
+
+func (s MonitorService) doReveal(commit []byte) bool {
+	var hash [32]byte
+	var seed [32]byte
+
+	value,exist := db.GetSeedBySeedHash(s.ldb, commit)
+	if !exist {
+		logs.Error("can't doreveal because not found seed", "commit", hex.EncodeToString(commit))
+		return false
+	}
+	copy(hash[:], commit[:])
+	copy(seed[:], value[:])
+	tx,err := s.oracleContract.Reveal(s.transopt, hash, seed)
+	if err != nil {
+		logs.Error("tx reveal failed", "err", err)
+		return false
+	}
+	receipt := s.waittx(tx)
+	if receipt != nil && receipt.Status == 1 {
+		// successful
+		return true
+	} else {
+		return false
+	}
+}
+
+func (s MonitorService) DoReveal(commit []byte) {
 	s.revealTask <- commit
 }
 
-func (s MonitorService) DoCommit() {
-	r := append(s.user.Bytes(),utils.CryptoRandom()...)
-	seed := sha3.Sum256(r)
-	seedHash,err := s.oracleContract.GetHash(s.callopt, seed)
-	if err != nil {
-		beego.Error("get seed hash failed", "err", err)
-		return
-	}
-	// todo: store seed and seedhash to leveldb.
-
-	//
-	tx,err := s.oracleContract.Commit(s.transopt, seedHash)
-	if err != nil {
-		logs.Error("commit seed hash failed", "err", err)
-		return
-	}
-	// todo: store seed hash and txhash.
-	tx.Hash()
-}
-
 func (s MonitorService) Run() {
-	// 1. filter logs.
-	// 2. check
-
+	var uncommitmap = make(map[common.Hash]bool)
+	// load unrevealed commit list from contract.
+	uncommited, err := s.oracleContract.GetUserUnverifiedList(s.callopt, s.user)
+	if err != nil {
+		//
+	}
+	for _, cml := range uncommited {
+		h := common.Hash{}
+		h.SetBytes(cml.Commit[:])
+		uncommitmap[h] = true
+	}
+	// load unreveal seed from db and merge with contract.
+	unrevealed := db.GetAllUnReveald(s.ldb)
+	for _, seedhash := range unrevealed {
+		h := common.Hash{}
+		h.SetBytes(seedhash[:])
+		if _,exist := uncommitmap[h]; exist {
+			if s.doReveal(seedhash) {
+				db.DelUnRevealSeed(s.ldb, seedhash)
+			}
+		} else {
+			db.DelUnRevealSeed(s.ldb, seedhash)
+		}
+	}
 
 	for {
+		select {
+		case commit,ok := <-s.revealTask:
+			if !ok {
+				return
+			}
+			s.doReveal(commit)
+		}
 
 	}
 }

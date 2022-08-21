@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/hpb-project/srng-robot/config"
 	"github.com/hpb-project/srng-robot/db"
+	"github.com/hpb-project/srng-robot/services/monitor"
 	"github.com/hpb-project/srng-robot/services/product"
 	"github.com/hpb-project/srng-robot/services/pullevent"
 )
@@ -13,16 +14,19 @@ type Robot struct {
 	config config.Config
 
 	pe *pullevent.PullEvent
+	pm *monitor.MonitorService
 	ps *product.ProductService
 }
 
 func NewRobot(config config.Config) *Robot {
+	robot := new(Robot)
+
 	ldb := db.NewLevelDB(config.DBPath)
 	if ldb == nil {
 		panic("db create failed")
 	}
 
-	pe := pullevent.NewPullEvent(config, ldb)
+	pe := pullevent.NewPullEvent(config, ldb, robot)
 	if pe == nil {
 		panic("create pull event servicce failed")
 	}
@@ -32,15 +36,32 @@ func NewRobot(config config.Config) *Robot {
 		panic(fmt.Sprintf("new product service failed with error (%s)",err ))
 	}
 
-	return &Robot{
-		ldb: ldb,
-		config: config,
-		ps: ps,
+	pm,err := monitor.NewMonitorService(config, ldb)
+	if err != nil {
+		panic(fmt.Sprintf("new monitor service failed with error (%s)",err))
 	}
+
+	robot.ldb = ldb
+	robot.config = config
+	robot.ps = ps
+	robot.pm = pm
+	robot.pe = pe
+
+	return robot
+}
+
+func (r *Robot) NewCommit() error {
+	return r.ps.DoCommit()
+}
+
+func (r *Robot) Reveal(commit []byte) error {
+	r.pm.DoReveal(commit)
+	return nil
 }
 
 func (r *Robot) Start() {
 	go r.pe.GetLogs()
+
 
 	r.ps.Run()
 

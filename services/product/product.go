@@ -88,17 +88,13 @@ func NewProductService(config config.Config, ldb *db.LevelDB)  (*ProductService,
 	return product, nil
 }
 
-func (s ProductService) DoReveal(commit common.Hash) {
-	s.revealTask <- commit
-}
-
-func (s ProductService) DoCommit() {
+func (s ProductService) DoCommit() error {
 	r := append(s.user.Bytes(),utils.CryptoRandom()...)
 	seed := sha3.Sum256(r)
 	seedHash,err := s.oracleContract.GetHash(s.callopt, seed)
 	if err != nil {
 		beego.Error("get seed hash failed", "err", err)
-		return
+		return err
 	}
 	// todo: store seed and seedhash to leveldb.
 
@@ -106,10 +102,11 @@ func (s ProductService) DoCommit() {
 	tx,err := s.oracleContract.Commit(s.transopt, seedHash)
 	if err != nil {
 		logs.Error("commit seed hash failed", "err", err)
-		return
+		return err
 	}
 	// todo: store seed hash and txhash.
 	tx.Hash()
+	return nil
 }
 
 func (s ProductService) Run() {

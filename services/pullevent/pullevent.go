@@ -26,6 +26,11 @@ var (
 	bigK       = big.NewInt(1000)
 )
 
+type Worker interface {
+	NewCommit() error
+	Reveal(commit []byte) error
+}
+
 type logHandler func(log types.Log, pe *PullEvent, addr common.Address) error
 
 type PullEvent struct {
@@ -35,9 +40,10 @@ type PullEvent struct {
 	oracle          common.Address
 	user            common.Address
 	contractHandler logHandler
+	work 			Worker
 }
 
-func NewPullEvent(config config.Config, ldb *db.LevelDB) *PullEvent {
+func NewPullEvent(config config.Config, ldb *db.LevelDB, w Worker) *PullEvent {
 	lastBlock := big.NewInt(0)
 	value, exist := ldb.Get([]byte(LastSyncBlockKey))
 	if exist {
@@ -55,6 +61,7 @@ func NewPullEvent(config config.Config, ldb *db.LevelDB) *PullEvent {
 		user:            utils.PrivkToAddress(config.PrivKey),
 		contractHandler: OracleContractHandler,
 		client:          client,
+		work: w,
 	}
 	return pe
 }
