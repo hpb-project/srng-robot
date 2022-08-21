@@ -213,9 +213,15 @@ func (s MonitorService) Run() {
 			db.DelUnRevealSeed(s.ldb, seedhash)
 		}
 	}
+	tm := time.NewTicker(time.Second * 10)
+	defer tm.Stop()
 
 	for {
 		select {
+		case <- tm.C:
+			if len(s.revealTask) < 10 {
+				s.DoCommit()
+			}
 		case commit,ok := <-s.revealTask:
 			if !ok {
 				return
