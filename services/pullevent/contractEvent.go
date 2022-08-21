@@ -5,10 +5,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/hpb-project/srng-robot/contracts"
+	"github.com/hpb-project/srng-robot/db"
 	"strings"
+	"time"
 )
 
-func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address) error {
+func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, history bool) error {
 	logs.Info("handler oracle contract logs")
 	filter, err := contracts.NewOracleFilterer(addr, pe.client)
 	if err != nil {
@@ -29,16 +31,14 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address) e
 				return nil
 			}
 			// go to reveal.
+			if _, exist := db.GetSeedBySeedHash(pe.ldb, sub.Hash[:]); exist {
+				// check unreveal
+				if db.HashUnRevealSeed(pe.ldb, sub.Hash[:]) {
+					pe.work.Reveal(sub.Hash[:])
+				}
+			}
+			pe.work.Reveal(sub.Hash[:])
 			logs.Info("commit has been subscribed", "commit", sub.Hash)
-
-		case EventUnSubscribe:
-			// ignore all unsubscribe event.
-
-			//unsub, err := filter.ParseUnSubscribe(vLog)
-			//if err != nil {
-			//	logs.Error("parse unsubscribe event failed", "err", err)
-			//	return err
-			//}
 
 		case EventCommitHash:
 			commit, err := filter.ParseCommitHash(vLog)
@@ -49,7 +49,20 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address) e
 			if commit.Sender != pe.user {
 				return nil
 			}
-			// todo: add commit to monitor list, reveal after some block
+			// first check commit exist and unreveal.
+			if _, exist := db.GetSeedBySeedHash(pe.ldb, commit.Hash[:]); exist {
+				// check unreveal
+				if db.HashUnRevealSeed(pe.ldb, commit.Hash[:]) {
+					if history {
+						pe.work.Reveal(commit.Hash[:])
+					} else {
+						go func(hash []byte) {
+							time.Sleep(time.Second*10)
+							pe.work.Reveal(hash)
+						}(commit.Hash[:])
+					}
+				}
+			}
 			logs.Info("got event commit", commit)
 		case EventRevealSeed:
 			reveal, err := filter.ParseRevealSeed(vLog)
@@ -60,16 +73,15 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address) e
 			if reveal.Commiter != pe.user {
 				return nil
 			}
-			// todo: set commit reveal finished.
-			logs.Info("got event reveal", reveal)
-		case EventRandomConsumed:
-			// ignore all consumed event.
-			//consume, err := filter.ParseRandomConsumed(vLog)
-			//if err != nil {
-			//	logs.Error("parse consume event failed", "err", err)
-			//	return err
-			//}
-			//logs.Info("got event consume", consume)
+			// set commit reveal finished.
+			db.DelUnRevealSeed(pe.ldb, reveal.Hash[:])
+			db.SetSeedHashAndSeed(pe.ldb, reveal.Hash[:], reveal.Seed[:])
+			logs.Info("commit reveal succeed", "event", reveal)
+
+		case EventUnSubscribe, EventRandomConsumed:
+			// ignore event.
+		default:
+			// do nothing.
 		}
 	}
 	return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -14,6 +15,7 @@ import (
 	"github.com/hpb-project/srng-robot/contracts"
 	"github.com/hpb-project/srng-robot/db"
 	"github.com/hpb-project/srng-robot/utils"
+	"golang.org/x/crypto/sha3"
 	"math/big"
 	"time"
 )
@@ -22,6 +24,7 @@ type MonitorService struct {
 	ctx context.Context
 	ldb *db.LevelDB
 	client *ethclient.Client
+	conf config.Config
 	oracleContract *contracts.Oracle
 
 	user common.Address
@@ -82,12 +85,34 @@ func NewMonitorService(config config.Config, ldb *db.LevelDB)  (*MonitorService,
 		oracleContract: oracle,
 		ldb: ldb,
 		user: keyAddr,
+		conf: config,
 		transopt: transopt,
 		callopt: callopt,
 		client:client,
-		revealTask: make(chan []byte, 10),
+		revealTask: make(chan []byte, 1000),
 	}
+	product.approvetoken(big.NewInt(10000000000))
 	return product, nil
+}
+
+func (s MonitorService)approvetoken(amount *big.Int) error {
+	var unit,_ = new(big.Int).SetString("1000000000000000000", 10)
+	token,err := contracts.NewToken(common.HexToAddress(s.conf.Token), s.client)
+	if err != nil {
+		logs.Error("create token contracts failed", "err", err)
+		return err
+	}
+	tx,err := token.Approve(s.transopt, common.HexToAddress(s.conf.Oracle), new(big.Int).Exp(amount, unit,nil))
+	if err != nil {
+		logs.Error("approve token failed", "err",err)
+		return err
+	}
+	receipt := s.waittx(tx)
+	if receipt != nil && receipt.Status == 1 {
+		return nil
+	} else {
+		return errors.New("approve token failed")
+	}
 }
 
 func (s MonitorService) waittx(tx *types.Transaction) *types.Receipt {
@@ -135,6 +160,30 @@ func (s MonitorService) doReveal(commit []byte) bool {
 	}
 }
 
+func (s MonitorService) DoCommit() error {
+	r := append(s.user.Bytes(),utils.CryptoRandom()...)
+	seed := sha3.Sum256(r)
+	seedHash,err := s.oracleContract.GetHash(s.callopt, seed)
+	if err != nil {
+		beego.Error("get seed hash failed", "err", err)
+		return err
+	}
+	db.SetSeedHashAndSeed(s.ldb, seedHash[:], seed[:])
+
+	tx,err := s.oracleContract.Commit(s.transopt, seedHash)
+	if err != nil {
+		logs.Error("commit seed hash failed", "err", err)
+		return err
+	}
+	receipt := s.waittx(tx)
+	if receipt != nil && receipt.Status == 1 {
+		db.SetUnRevealSeed(s.ldb, seedHash[:])
+		return nil
+	} else {
+		return errors.New("commit failed")
+	}
+}
+
 func (s MonitorService) DoReveal(commit []byte) {
 	s.revealTask <- commit
 }
@@ -171,7 +220,10 @@ func (s MonitorService) Run() {
 			if !ok {
 				return
 			}
-			s.doReveal(commit)
+			succeed := s.doReveal(commit)
+			if succeed {
+				db.DelUnRevealSeed(s.ldb, commit)
+			}
 		}
 
 	}

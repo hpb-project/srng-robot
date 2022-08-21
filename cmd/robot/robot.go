@@ -5,7 +5,6 @@ import (
 	"github.com/hpb-project/srng-robot/config"
 	"github.com/hpb-project/srng-robot/db"
 	"github.com/hpb-project/srng-robot/services/monitor"
-	"github.com/hpb-project/srng-robot/services/product"
 	"github.com/hpb-project/srng-robot/services/pullevent"
 )
 
@@ -15,7 +14,6 @@ type Robot struct {
 
 	pe *pullevent.PullEvent
 	pm *monitor.MonitorService
-	ps *product.ProductService
 }
 
 func NewRobot(config config.Config) *Robot {
@@ -31,11 +29,6 @@ func NewRobot(config config.Config) *Robot {
 		panic("create pull event servicce failed")
 	}
 
-	ps,err := product.NewProductService(config, ldb)
-	if err != nil {
-		panic(fmt.Sprintf("new product service failed with error (%s)",err ))
-	}
-
 	pm,err := monitor.NewMonitorService(config, ldb)
 	if err != nil {
 		panic(fmt.Sprintf("new monitor service failed with error (%s)",err))
@@ -43,7 +36,6 @@ func NewRobot(config config.Config) *Robot {
 
 	robot.ldb = ldb
 	robot.config = config
-	robot.ps = ps
 	robot.pm = pm
 	robot.pe = pe
 
@@ -51,7 +43,7 @@ func NewRobot(config config.Config) *Robot {
 }
 
 func (r *Robot) NewCommit() error {
-	return r.ps.DoCommit()
+	return r.pm.DoCommit()
 }
 
 func (r *Robot) Reveal(commit []byte) error {
@@ -61,11 +53,7 @@ func (r *Robot) Reveal(commit []byte) error {
 
 func (r *Robot) Start() {
 	go r.pe.GetLogs()
-
-
-	r.ps.Run()
-
-
+	go r.pm.Run()
 
 	run := make(chan struct{})
 	<-run

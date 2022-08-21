@@ -37,6 +37,7 @@ type PullEvent struct {
 	ctx             context.Context
 	client          *ethclient.Client
 	lastBlock       *big.Int
+	ldb             *db.LevelDB
 	oracle          common.Address
 	user            common.Address
 	contractHandler logHandler
@@ -61,6 +62,7 @@ func NewPullEvent(config config.Config, ldb *db.LevelDB, w Worker) *PullEvent {
 		user:            utils.PrivkToAddress(config.PrivKey),
 		contractHandler: OracleContractHandler,
 		client:          client,
+		ldb: ldb,
 		work: w,
 	}
 	return pe
