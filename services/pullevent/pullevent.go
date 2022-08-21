@@ -65,6 +65,7 @@ func NewPullEvent(config config.Config, ldb *db.LevelDB, w Worker) *PullEvent {
 		ldb: ldb,
 		work: w,
 	}
+	logs.Info("create pull evnet succeed")
 	return pe
 }
 

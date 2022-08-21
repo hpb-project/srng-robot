@@ -91,7 +91,9 @@ func NewMonitorService(config config.Config, ldb *db.LevelDB)  (*MonitorService,
 		client:client,
 		revealTask: make(chan []byte, 1000),
 	}
+	logs.Info("create monitor succeed")
 	product.approvetoken(big.NewInt(10000000000))
+	logs.Info("token approve succeed")
 	return product, nil
 }
 
@@ -118,6 +120,7 @@ func (s MonitorService)approvetoken(amount *big.Int) error {
 func (s MonitorService) waittx(tx *types.Transaction) *types.Receipt {
 	ticker := time.NewTicker(time.Second*2)
 	timeout := time.NewTimer(time.Second*30)
+	logs.Debug("wait tx", "hash", tx.Hash())
 	defer ticker.Stop()
 	defer timeout.Stop()
 	for {

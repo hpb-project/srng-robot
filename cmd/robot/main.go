@@ -9,5 +9,4 @@ func main() {
 	logs.Info("srng robot start")
 	robot := NewRobot(config.GetConfig())
 	robot.Start()
-
 }
