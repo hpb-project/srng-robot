@@ -114,6 +114,7 @@ func (p *PullEvent) GetLogs() {
 				}
 			}
 		}
+		p.ldb.Set([]byte(LastSyncBlockKey), p.lastBlock.Bytes())
 		p.lastBlock = new(big.Int).Add(query.ToBlock, bigOne)
 	}
 }

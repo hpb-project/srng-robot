@@ -93,7 +93,7 @@ func NewMonitorService(config config.Config, ldb *db.LevelDB)  (*MonitorService,
 	}
 	logs.Info("create monitor succeed")
 	product.approvetoken(big.NewInt(10000000000))
-	logs.Info("token approve succeed")
+	logs.Info("token approve finished")
 	return product, nil
 }
 
@@ -111,8 +111,10 @@ func (s MonitorService)approvetoken(amount *big.Int) error {
 	}
 	receipt := s.waittx(tx)
 	if receipt != nil && receipt.Status == 1 {
+		logs.Info("approve token succeed")
 		return nil
 	} else {
+		logs.Info("approve token failed")
 		return errors.New("approve token failed")
 	}
 }
