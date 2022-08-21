@@ -31,7 +31,7 @@ type Worker interface {
 	Reveal(commit []byte) error
 }
 
-type logHandler func(log types.Log, pe *PullEvent, addr common.Address) error
+type logHandler func(log types.Log, pe *PullEvent, addr common.Address, history bool) error
 
 type PullEvent struct {
 	ctx             context.Context
@@ -73,18 +73,28 @@ func (p *PullEvent) GetLogs() {
 	query.FromBlock = p.lastBlock
 	query.ToBlock = new(big.Int).Add(p.lastBlock, big.NewInt(1))
 	query.Addresses = []common.Address{p.oracle}
+
+	if p.lastBlock.Int64() == 0 {
+		//txhash := "0xfb81bc90de4e420ac431c7d3dbc7814aa53c7735deebc9f6da8a0f32f0007cbe" // test contract.
+		txhash := "0x930083fd76be4f3613f59e1110b8b0c3534ce75043d394147c281c18f09b4440" // product contract
+		receipt,_ := p.client.TransactionReceipt(p.ctx, common.HexToHash(txhash))
+		p.lastBlock = receipt.BlockNumber
+	}
 	for {
 		query.FromBlock = p.lastBlock
 
 		log.Info("start fileter start at ", p.lastBlock.Text(10))
+		history := false
 		height, err := p.client.BlockNumber(p.ctx)
 		if height <= p.lastBlock.Uint64() {
 			time.Sleep(time.Second)
 			continue
 		} else if (height - 1000) >= p.lastBlock.Uint64() {
 			query.ToBlock = new(big.Int).Add(p.lastBlock, bigK)
+			history = true
 		} else if (height - 100) >= p.lastBlock.Uint64() {
 			query.ToBlock = new(big.Int).Add(p.lastBlock, bighundred)
+			history = true
 		} else if (height - 10) >= p.lastBlock.Uint64() {
 			query.ToBlock = new(big.Int).Add(p.lastBlock, bigTen)
 		} else {
@@ -99,7 +109,7 @@ func (p *PullEvent) GetLogs() {
 		if len(allLogs) > 0 {
 			for _, vlog := range allLogs {
 				if p.contractHandler != nil {
-					p.contractHandler(vlog, p, vlog.Address)
+					p.contractHandler(vlog, p, vlog.Address, history)
 				}
 			}
 		}
