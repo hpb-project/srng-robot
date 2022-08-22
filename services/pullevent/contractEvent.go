@@ -9,6 +9,13 @@ import (
 	"strings"
 	"time"
 )
+func friendlyCommit(commit contracts.Commit) string {
+	s := fmt.Sprintf("author:%s, commit:%s, commitblock:%s, seed:%s, revealed:%v, consumer:%s, subsender:%s, subblock:%s",
+	commit.Author.String(), hex.EncodeToString(commit.Commit[:]), commit.Block.Text(10), hex.EncodeToString(commit.Seed[:]),
+	commit.Revealed, commit.Consumer.String(), commit.Subsender.String(), commit.SubBlock.Text(10))
+	p := append([]byte(""), s...)
+	return string(p)
+}
 
 func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, history bool) error {
 	logs.Info("handler oracle contract logs")
@@ -19,7 +26,6 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 	}
 	{
 		method := vLog.Topics[0]
-		logs.Info("got event ", vLog)
 		switch strings.ToLower(method.String()) {
 		case EventSubscribe:
 			sub, err := filter.ParseSubscribe(vLog)
@@ -31,7 +37,7 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 				return nil
 			}
 			// go to reveal.
-			logs.Info("commit has been subscribed", "commit", sub.Hash)
+			logs.Info("got subscribe event","commit info", friendlyCommit(sub))
 			if _, exist := db.GetSeedBySeedHash(pe.ldb, sub.Hash[:]); exist {
 				// check unreveal
 				if db.HashUnRevealSeed(pe.ldb, sub.Hash[:]) {
@@ -50,7 +56,7 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 			if commit.Sender != pe.user {
 				return nil
 			}
-			logs.Info("got event commit", commit)
+			logs.Info("got commit event", "commit info", friendlyCommit(commit))
 			// first check commit exist and unreveal.
 			if _, exist := db.GetSeedBySeedHash(pe.ldb, commit.Hash[:]); exist {
 				// check unreveal
@@ -75,7 +81,7 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 			if reveal.Commiter != pe.user {
 				return nil
 			}
-			logs.Info("commit reveal succeed", "event", reveal)
+			logs.Info("got revealed event", "commit", friendlyCommit(reveal))
 			// set commit reveal finished.
 			db.DelUnRevealSeed(pe.ldb, reveal.Hash[:])
 			db.SetSeedHashAndSeed(pe.ldb, reveal.Hash[:], reveal.Seed[:])
