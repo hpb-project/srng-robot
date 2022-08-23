@@ -99,11 +99,12 @@ func NewMonitorService(config config.Config, ldb *db.LevelDB)  (*MonitorService,
 	return product, nil
 }
 
-func (s MonitorService)getnonce() uint64 {
+func (s *MonitorService)getnonce() uint64 {
 	s.muxnonce.Lock()
 	defer s.muxnonce.Unlock()
 	var result uint64
 	chain,_ := s.client.NonceAt(s.ctx, s.user, nil)
+	logs.Info("on chain nonce is", chain, "local nonce is", s.nonce)
 	if chain > s.nonce {
 		result = chain
 		s.nonce = chain + 1
@@ -111,10 +112,11 @@ func (s MonitorService)getnonce() uint64 {
 		result = s.nonce
 		s.nonce += 1
 	}
+	logs.Info("get nonce", result)
 	return result
 }
 
-func (s MonitorService)getTransopt() *bind.TransactOpts {
+func (s *MonitorService)getTransopt() *bind.TransactOpts {
 	transopt := &bind.TransactOpts{
 		From: s.user,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -135,7 +137,7 @@ func (s MonitorService)getTransopt() *bind.TransactOpts {
 	return transopt
 }
 
-func (s MonitorService)approvetoken(amount *big.Int) error {
+func (s *MonitorService)approvetoken(amount *big.Int) error {
 	var unit,_ = new(big.Int).SetString("1000000000000000000", 10)
 	token,err := contracts.NewToken(common.HexToAddress(s.conf.Token), s.client)
 	if err != nil {
@@ -157,7 +159,7 @@ func (s MonitorService)approvetoken(amount *big.Int) error {
 	}
 }
 
-func (s MonitorService) waittx(tx *types.Transaction) *types.Receipt {
+func (s *MonitorService) waittx(tx *types.Transaction) *types.Receipt {
 	ticker := time.NewTicker(time.Second*2)
 	timeout := time.NewTimer(time.Second*30)
 	logs.Debug("wait tx", "hash", tx.Hash())
@@ -178,7 +180,7 @@ func (s MonitorService) waittx(tx *types.Transaction) *types.Receipt {
 	}
 }
 
-func (s MonitorService) doReveal(commit []byte, needcheck bool) bool {
+func (s *MonitorService) doReveal(commit []byte, needcheck bool) bool {
 	var hash [32]byte
 	var seed [32]byte
 
@@ -205,14 +207,14 @@ func (s MonitorService) doReveal(commit []byte, needcheck bool) bool {
 	}
 }
 
-func (s MonitorService) AddToRevealAgain(commit []byte) {
+func (s *MonitorService) AddToRevealAgain(commit []byte) {
 	s.waitmux.Lock()
 	defer s.waitmux.Unlock()
 
 	s.waittoreveal = append(s.waittoreveal, commit)
 }
 
-func (s MonitorService) DoCommit() error {
+func (s *MonitorService) DoCommit() error {
 	r := append(s.user.Bytes(),utils.CryptoRandom()...)
 	seed := sha3.Sum256(r)
 	seedHash,err := s.oracleContract.GetHash(s.callopt, seed)
@@ -236,50 +238,61 @@ func (s MonitorService) DoCommit() error {
 	return nil
 }
 
-func (s MonitorService) DoReveal(commit []byte) {
+func (s *MonitorService) DoReveal(commit []byte) {
 	s.revealTask <- commit
 }
 
-func (s MonitorService) MergeRecord(waittoreveal [][]byte) [][]byte {
+func (s *MonitorService) MergeRecord(waittoreveal [][]byte) [][]byte {
 	var needtoreveal = make([][]byte,0)
 	var needtorevealmap = make(map[common.Hash]bool)
 
 	var uncommitmap = make(map[common.Hash]contracts.Commit)
 	curblock,_ := s.client.BlockNumber(s.ctx)
+	logs.Info("goto merge record", "wait to reveal length", len(waittoreveal))
+	for i:=0; i < len(waittoreveal); i++ {
+		logs.Info("goto merge record", "waittoreveal ", waittoreveal[i])
+	}
 
 	// load unrevealed commit list from contract.
 	uncommited, err := s.oracleContract.GetUserUnverifiedList(s.callopt, s.user)
 	if err != nil {
-		//
+		logs.Error("can't get user unverified list", "err", err)
 	}
+	logs.Info("got uncommited", "length is", len(uncommited))
 	for _, cml := range uncommited {
 		h := common.Hash{}
 		h.SetBytes(cml.Commit[:])
 		uncommitmap[h] = cml
+		//logs.Info("there are commit unverified", "hash", h)
 	}
 
 	for _, seedhash := range waittoreveal {
 		h := common.Hash{}
 		h.SetBytes(seedhash[:])
+		logs.Info("check commit to reveal", "hash", h)
 		if _,exist := needtorevealmap[h]; exist {
 			continue
 		}
 
 		if info,exist := uncommitmap[h]; exist {
 			if (info.Block.Int64() + MAX_UNVERIFY_BLOCK) <= int64(curblock) {
+				logs.Info("check commit to reveal", "hash", h, "timeout", true)
 				// timeout
 			} else {
 				needtorevealmap[h] = true
 				needtoreveal = append(needtoreveal, h.Bytes())
+				logs.Info("check commit to reveal", "hash", h, "addtoreveal", true)
 			}
 		} else {
 			// wait commit can find in contract.
+			logs.Info("check commit to reveal", "hash", h, "not found in contract", true)
 		}
 	}
+	logs.Info("merged commit need to reveal", "length", len(needtoreveal))
 	return needtoreveal
 }
 
-func (s MonitorService) Run() {
+func (s *MonitorService) Run() {
 	needreveal := s.MergeRecord(db.GetAllUnReveald(s.ldb))
 	for _, r := range needreveal {
 		s.doReveal(r, false)

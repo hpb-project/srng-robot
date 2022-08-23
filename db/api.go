@@ -77,7 +77,9 @@ func DelUnRevealSeed(ldb *LevelDB, hash []byte) {
 func GetAllUnReveald(ldb *LevelDB) [][]byte {
 	seedhash := make([][]byte, 0, 1000)
 	ldb.Iterator([]byte(prefixUnrevealedSeed), func(k, v []byte) {
-		seedhash = append(seedhash, v)
+		p := make([]byte, len(v))
+		copy(p[:],v[:])
+		seedhash = append(seedhash, p)
 	})
 	return seedhash
 }
