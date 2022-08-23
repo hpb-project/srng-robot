@@ -5,6 +5,7 @@ const (
 	prefixSeedHashAndTx     = "kst"
 	prefixSeedHashAndCommit = "ksm"
 	prefixUnrevealedSeed    = "kunreveal"
+	prefixRevealedSeed      = "krevealed"
 )
 
 func keySeedHashAndSeed(hash []byte) []byte {
@@ -21,6 +22,10 @@ func keySeedHashAndCommit(hash []byte) []byte {
 
 func keySeedHashUnReveal(hash []byte) []byte {
 	return append([]byte(prefixUnrevealedSeed), hash...)
+}
+
+func keySeedHashRevealed(hash []byte) []byte {
+	return append([]byte(prefixRevealedSeed), hash...)
 }
 
 func SetSeedHashAndSeed(ldb *LevelDB, hash []byte, seed []byte) error {
@@ -47,11 +52,20 @@ func GetTxBySeedCommit(ldb *LevelDB, hash []byte) ([]byte, bool) {
 	return ldb.Get(keySeedHashAndCommit(hash))
 }
 
+func SetRevealedSeed(ldb *LevelDB, hash []byte) error {
+	return ldb.Set(keySeedHashRevealed(hash), hash)
+}
+
+func HasRevealedSeed(ldb *LevelDB, hash []byte) bool {
+	_, exist := ldb.Get(keySeedHashRevealed(hash))
+	return exist
+}
+
 func SetUnRevealSeed(ldb *LevelDB, hash []byte) error {
 	return ldb.Set(keySeedHashUnReveal(hash), hash)
 }
 
-func HashUnRevealSeed(ldb *LevelDB, hash []byte) bool {
+func HasUnRevealSeed(ldb *LevelDB, hash []byte) bool {
 	find, _ := ldb.Has(keySeedHashUnReveal(hash))
 	return find
 }

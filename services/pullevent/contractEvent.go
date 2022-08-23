@@ -1,21 +1,14 @@
 package pullevent
 
 import (
+	"encoding/hex"
 	"github.com/astaxie/beego/logs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/hpb-project/srng-robot/contracts"
 	"github.com/hpb-project/srng-robot/db"
 	"strings"
-	"time"
 )
-func friendlyCommit(commit contracts.Commit) string {
-	s := fmt.Sprintf("author:%s, commit:%s, commitblock:%s, seed:%s, revealed:%v, consumer:%s, subsender:%s, subblock:%s",
-	commit.Author.String(), hex.EncodeToString(commit.Commit[:]), commit.Block.Text(10), hex.EncodeToString(commit.Seed[:]),
-	commit.Revealed, commit.Consumer.String(), commit.Subsender.String(), commit.SubBlock.Text(10))
-	p := append([]byte(""), s...)
-	return string(p)
-}
 
 func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, history bool) error {
 	logs.Info("handler oracle contract logs")
@@ -37,10 +30,10 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 				return nil
 			}
 			// go to reveal.
-			logs.Info("got subscribe event","commit info", friendlyCommit(sub))
+			logs.Info("got subscribe event","commithash", hex.EncodeToString(sub.Hash[:]), "consumer is", sub.Consumer)
 			if _, exist := db.GetSeedBySeedHash(pe.ldb, sub.Hash[:]); exist {
 				// check unreveal
-				if db.HashUnRevealSeed(pe.ldb, sub.Hash[:]) {
+				if db.HasUnRevealSeed(pe.ldb, sub.Hash[:]) {
 					pe.work.Reveal(sub.Hash[:])
 				}
 			}
@@ -56,21 +49,8 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 			if commit.Sender != pe.user {
 				return nil
 			}
-			logs.Info("got commit event", "commit info", friendlyCommit(commit))
+			logs.Info("got new commit event", "commit hash", hex.EncodeToString(commit.Hash[:]), "block", commit.Block)
 			// first check commit exist and unreveal.
-			if _, exist := db.GetSeedBySeedHash(pe.ldb, commit.Hash[:]); exist {
-				// check unreveal
-				if db.HashUnRevealSeed(pe.ldb, commit.Hash[:]) {
-					if history {
-						pe.work.Reveal(commit.Hash[:])
-					} else {
-						go func(hash []byte) {
-							time.Sleep(time.Second*10)
-							pe.work.Reveal(hash)
-						}(commit.Hash[:])
-					}
-				}
-			}
 
 		case EventRevealSeed:
 			reveal, err := filter.ParseRevealSeed(vLog)
@@ -81,7 +61,7 @@ func OracleContractHandler(vLog types.Log, pe *PullEvent, addr common.Address, h
 			if reveal.Commiter != pe.user {
 				return nil
 			}
-			logs.Info("got revealed event", "commit", friendlyCommit(reveal))
+			logs.Info("got revealed event", "commit", hex.EncodeToString(reveal.Hash[:]))
 			// set commit reveal finished.
 			db.DelUnRevealSeed(pe.ldb, reveal.Hash[:])
 			db.SetSeedHashAndSeed(pe.ldb, reveal.Hash[:], reveal.Seed[:])
