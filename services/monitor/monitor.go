@@ -184,6 +184,10 @@ func (s *MonitorService) doReveal(commit []byte, needcheck bool) bool {
 	var hash [32]byte
 	var seed [32]byte
 
+	if !db.HasUnRevealSeed(s.ldb, commit) {
+		return true;
+	}
+
 	value,exist := db.GetSeedBySeedHash(s.ldb, commit)
 	if !exist {
 		logs.Error("can't doreveal because not found seed", "commit", hex.EncodeToString(commit))
