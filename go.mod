@@ -6,14 +6,13 @@ require (
 	github.com/astaxie/beego v1.12.3
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/ethereum/go-ethereum v1.10.21
-	github.com/garyburd/redigo v1.6.3
-	github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
-	github.com/go-sql-driver/mysql v1.6.0
 	github.com/prometheus/common v0.10.0
 	github.com/shopspring/decimal v1.3.1
 	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 )
+
+require github.com/golang/snappy v0.0.4 // indirect
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
@@ -32,7 +31,6 @@ require (
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.7.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/procfs v0.1.3 // indirect
@@ -40,6 +38,7 @@ require (
 	github.com/shiena/ansicolor v0.0.0-20151119151921-a422bbe96644 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/sirupsen/logrus v1.4.2 // indirect
+	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
