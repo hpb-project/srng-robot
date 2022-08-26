@@ -76,7 +76,7 @@ func (p *PullEvent) GetLogs() {
 	query.Addresses = []common.Address{p.oracle}
 
 	if p.lastBlock.Int64() == 0 {
-		txhash := "0x3250740771f168fa38a21e98b5bb423f9b81f12866f2e4710a79309c3614108c" // product contract
+		txhash := "0xc09ee633c039874b876b460f80f37e0b49d18efff32c0b7a5e317db87ae68b9e" // product contract
 		receipt,_ := p.client.TransactionReceipt(p.ctx, common.HexToHash(txhash))
 		p.lastBlock = receipt.BlockNumber
 	}
